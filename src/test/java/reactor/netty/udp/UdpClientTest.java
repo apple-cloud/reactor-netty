@@ -69,9 +69,7 @@ public class UdpClientTest {
 				         .runOn(resources)
 				         .handle((in, out) -> {
 				                                  in.receive()
-				                                    .subscribe(b -> {
-				                                        latch.countDown();
-				                                    });
+				                                    .subscribe(b -> latch.countDown());
 				                                  return out.sendString(Mono.just("ping1"))
 				                                            .then(out.sendString(Mono.just("ping2")))
 				                                            .neverComplete();
@@ -87,9 +85,7 @@ public class UdpClientTest {
 				         .runOn(resources)
 				         .handle((in, out) -> {
 				                                  in.receive()
-				                                    .subscribe(b -> {
-				                                        latch.countDown();
-				                                    });
+				                                    .subscribe(b -> latch.countDown());
 				                                  return out.sendString(Mono.just("ping3"))
 				                                            .then(out.sendString(Mono.just("ping4")))
 				                                            .neverComplete();
@@ -108,14 +104,22 @@ public class UdpClientTest {
 	@Test
 	public void testIssue192() {
 		LoopResources resources = LoopResources.create("testIssue192");
-		UdpServer server = UdpServer.create()
-		                            .runOn(resources);
-		UdpClient client = UdpClient.create()
-		                            .runOn(resources);
+		Mono<Connection> server = UdpServer.create()
+		                                   .runOn(resources)
+		                                   .bind();
+		Mono<Connection> client = UdpClient.create()
+		                                   .runOn(resources)
+		                                   .connect();
 		assertThat(Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().startsWith("testIssue192"))).isTrue();
-		server.bind();
-		client.connect();
+
+		Connection conn1 = server.block(Duration.ofSeconds(30));
+		Connection conn2 = client.block(Duration.ofSeconds(30));
+		assertThat(conn1).isNotNull();
+		assertThat(conn2).isNotNull();
 		assertThat(Thread.getAllStackTraces().keySet().stream().anyMatch(t -> t.getName().startsWith("testIssue192"))).isTrue();
+
+		conn1.disposeNow();
+		conn2.disposeNow();
 		resources.dispose();
 	}
 }
