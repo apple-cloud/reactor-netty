@@ -228,7 +228,7 @@ public final class TransportConnector {
 	}
 
 
-	static final class MonoChannelPromise extends Mono<Channel> implements ChannelPromise {
+	static final class MonoChannelPromise extends Mono<Channel> implements ChannelPromise, Subscription {
 
 		final Channel channel;
 
@@ -277,6 +277,13 @@ public final class TransportConnector {
 		@Override
 		public boolean awaitUninterruptibly(long timeout, TimeUnit unit) {
 			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		@SuppressWarnings("FutureReturnValueIgnored")
+		public void cancel() {
+			// "FutureReturnValueIgnored" this is deliberate
+			channel.close();
 		}
 
 		@Override
@@ -346,6 +353,11 @@ public final class TransportConnector {
 		@SuppressWarnings("unchecked")
 		public ChannelPromise removeListeners(GenericFutureListener<? extends Future<? super Void>>... listeners) {
 			return this;
+		}
+
+		@Override
+		public void request(long n) {
+			// noop
 		}
 
 		@Override
@@ -460,8 +472,7 @@ public final class TransportConnector {
 
 		void _subscribe(CoreSubscriber<? super Channel> actual) {
 			this.actual = actual;
-			MonoChannelPromiseSubscription s = new MonoChannelPromiseSubscription();
-			actual.onSubscribe(s);
+			actual.onSubscribe(this);
 
 			if (isDone()) {
 				if (isSuccess()) {
@@ -478,19 +489,6 @@ public final class TransportConnector {
 		static final AtomicReferenceFieldUpdater<MonoChannelPromise, Object> RESULT_UPDATER =
 				AtomicReferenceFieldUpdater.newUpdater(MonoChannelPromise.class, Object.class, "result");
 		volatile Object result;
-
-		static final class MonoChannelPromiseSubscription implements Subscription {
-
-			@Override
-			public void request(long n) {
-				// noop
-			}
-
-			@Override
-			public void cancel() {
-				// noop
-			}
-		}
 	}
 
 	static final Logger log = Loggers.getLogger(TransportConnector.class);
